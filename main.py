@@ -2,8 +2,6 @@ import pygame
 from sys import exit
 from math import acos, cos, sin, sqrt, pi, degrees
 
-# Le tir ; bug de tremblements ; bug de murs qui bougent ; bug du joueur qui ne peut pas s'approcher des murs
-
 
 class Player(pygame.sprite.Sprite):
     def __init__(self):
