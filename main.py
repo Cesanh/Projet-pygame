@@ -34,25 +34,25 @@ class Player(pygame.sprite.Sprite):
 
             if self.angle > 0 and angle_cursor > 0:
                 if self.angle > angle_cursor:
-                    self.angle -= 0.05
+                    self.move_angle(-0.05, self.angle - angle_cursor)
                 else:
-                    self.angle += 0.05
+                    self.move_angle(0.05, angle_cursor - self.angle)
             elif self.angle < 0 and angle_cursor < 0:
                 if self.angle < angle_cursor:
-                    self.angle += 0.05
+                    self.move_angle(0.05, angle_cursor - self.angle)
                 else:
-                    self.angle -= 0.05
+                    self.move_angle(-0.05, self.angle - angle_cursor)
             else:
                 if self.angle > 0:
                     if self.angle - angle_cursor > pi:
-                        self.angle += 0.05
+                        self.move_angle(0.05, pi - self.angle + pi + angle_cursor)
                     else:
-                        self.angle -= 0.05
+                        self.move_angle(-0.05, self.angle - angle_cursor)
                 else:
                     if angle_cursor - self.angle > pi:
-                        self.angle -= 0.05
+                        self.move_angle(-0.05, pi + self.angle + pi - angle_cursor)
                     else:
-                        self.angle += 0.05
+                        self.move_angle(0.05, angle_cursor - self.angle)
 
             if self.angle > pi:
                 self.angle = self.angle - 2 * pi
@@ -88,8 +88,6 @@ class Player(pygame.sprite.Sprite):
         global camera_x
         global camera_y
 
-        self.image = pygame.transform.rotozoom(self.image_const, degrees(-self.angle - pi / 2), 1)
-
         if self.speed_x > 0.1:
             self.speed_x -= 0.1
         elif self.speed_x < -0.1:
@@ -106,20 +104,24 @@ class Player(pygame.sprite.Sprite):
 
         if self.rect.right > 2460 + camera_x and self.speed_x > 0:
             self.speed_x = 0
-            self.rect.right = 2460 + camera_x
         elif self.rect.left < -540 + camera_x and self.speed_x < 0:
             self.speed_x = 0
-            self.rect.left = -540 + camera_x
 
         if self.rect.bottom > 2040 + camera_y and self.speed_y > 0:
             self.speed_y = 0
-            self.rect.bottom = 2040 + camera_y
         elif self.rect.top < -960 + camera_y and self.speed_y < 0:
             self.speed_y = 0
-            self.rect.top = -960 + camera_y
 
         self.rect.x += self.speed_x + camera_x_speed
         self.rect.y += self.speed_y + camera_y_speed
+
+        self.image = pygame.transform.rotozoom(self.image_const, degrees(-self.angle - pi / 2), 1)
+
+    def move_angle(self, angle, difference):
+        if difference >= 0.05:
+            self.angle += angle
+        else:
+            self.angle += difference * angle / 0.05
 
     def camera(self):
         global camera_x_speed
@@ -153,10 +155,46 @@ class Player(pygame.sprite.Sprite):
         else:
             camera_y_speed = 0
 
+    def shoot(self):
+        missile.add(Missile(10, 0, 0, self.rect.center, self.angle))
+
+    def update(self, shoot):
+        if shoot:
+            self.shoot()
+        else:
+            self.input()
+            self.move()
+            self.camera()
+
+
+class Missile(pygame.sprite.Sprite):
+    def __init__(self, speed, damage, image_index, pos, angle):
+        super().__init__()
+        self.speed_x = speed * cos(angle)
+        self.speed_y = speed * sin(angle)
+        self.damage = damage
+        image_0 = pygame.image.load('graphics/missile.png')
+        images = [image_0]
+        self.image = images[image_index]
+        self.rect = self.image.get_rect(center=pos)
+        self.image = pygame.transform.rotozoom(self.image, degrees(-angle - pi / 2), 0.25)
+
+    def move(self):
+        self.rect.x += self.speed_x
+        self.rect.y += self.speed_y
+
+        if self.rect.right > 2560 + camera_x:
+            self.kill()
+        elif self.rect.left < -640 + camera_x:
+            self.kill()
+
+        if self.rect.bottom > 2140 + camera_y:
+            self.kill()
+        elif self.rect.top < -1060 + camera_y:
+            self.kill()
+
     def update(self):
-        self.input()
         self.move()
-        self.camera()
 
 
 pygame.init()
@@ -183,6 +221,8 @@ bottom_wall.fill((85, 91, 97))
 player = pygame.sprite.GroupSingle()
 player.add(Player())
 
+missile = pygame.sprite.Group()
+
 while True:
     for event in pygame.event.get():
         if event.type == pygame.QUIT:
@@ -194,11 +234,20 @@ while True:
                 pygame.quit()
                 exit()
 
+        if event.type == pygame.MOUSEBUTTONDOWN:
+            mouse_click = pygame.mouse.get_pressed()
+
+            if mouse_click[0]:
+                player.update(True)
+
     camera_x += camera_x_speed
     camera_y += camera_y_speed
 
     screen.fill((192, 233, 239))
-    player.update()
+
+    missile.update()
+    missile.draw(screen)
+    player.update(False)
     player.draw(screen)
 
     screen.blit(left_wall, (-1808 + camera_x, -1892 + camera_y))
