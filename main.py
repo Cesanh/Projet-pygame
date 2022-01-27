@@ -1,4 +1,7 @@
 import pygame
+import socket
+import _thread
+import pickle
 from sys import exit
 from math import acos, cos, sin, sqrt, pi, degrees
 
@@ -75,8 +78,18 @@ class Player(pygame.sprite.Sprite):
         if keys[pygame.K_q] and not(keys[pygame.K_z]):
             self.angle -= 0.05
 
+            if self.angle > pi:
+                self.angle = self.angle - 2 * pi
+            elif self.angle < -pi:
+                self.angle = self.angle + 2 * pi
+
         if keys[pygame.K_d] and not(keys[pygame.K_z]):
             self.angle += 0.05
+
+            if self.angle > pi:
+                self.angle = self.angle - 2 * pi
+            elif self.angle < -pi:
+                self.angle = self.angle + 2 * pi
 
         if keys[pygame.K_s] and not(keys[pygame.K_z]):
             self.speed_x = -cos(self.angle) * 2
@@ -197,6 +210,38 @@ class Missile(pygame.sprite.Sprite):
         self.move()
 
 
+def receive(server):
+    global list_player
+
+    while True:
+        try:
+            message = pickle.loads(server.recv(2048))
+        except OSError:
+            break
+
+        while len(list_player) < message[3] + 1:
+            list_player.append(None)
+
+        list_player[message[3]] = message
+
+
+def send(server):
+    while True:
+        try:
+            server.send(pickle.dumps([player.sprite.rect.x, player.sprite.rect.y, player.sprite.angle]))
+        except OSError:
+            break
+
+        clock.tick(60)
+
+
+def update_multiplayer(list_player):
+    for k in range(len(list_player)):
+        image = pygame.image.load('graphics/player.png')
+        image = pygame.transform.rotozoom(image, degrees(-list_player[k][2] - pi / 2), 0.75)
+        screen.blit(image, (list_player[k][0], list_player[k][1]))
+
+
 pygame.init()
 
 flag = pygame.FULLSCREEN
@@ -207,6 +252,11 @@ camera_x_speed = 0
 camera_y_speed = 0
 camera_x = 0
 camera_y = 0
+game_active = False
+multiplayer = False
+ip = ''
+port = 5555
+list_player = []
 
 left_wall = pygame.Surface((1268, 4864))
 right_wall = pygame.Surface((1268, 4864))
@@ -226,34 +276,56 @@ missile = pygame.sprite.Group()
 while True:
     for event in pygame.event.get():
         if event.type == pygame.QUIT:
+            if multiplayer:
+                server.close()
+
             pygame.quit()
             exit()
 
         if event.type == pygame.KEYDOWN:
             if event.key == pygame.K_ESCAPE:
+                if multiplayer:
+                    server.close()
+
                 pygame.quit()
                 exit()
 
-        if event.type == pygame.MOUSEBUTTONDOWN:
+        if event.type == pygame.MOUSEBUTTONDOWN and game_active:
             mouse_click = pygame.mouse.get_pressed()
 
             if mouse_click[0]:
                 player.update(True)
 
-    camera_x += camera_x_speed
-    camera_y += camera_y_speed
+    if game_active:
+        camera_x += camera_x_speed
+        camera_y += camera_y_speed
 
-    screen.fill((192, 233, 239))
+        screen.fill((192, 233, 239))
 
-    missile.update()
-    missile.draw(screen)
-    player.update(False)
-    player.draw(screen)
+        missile.update()
+        missile.draw(screen)
 
-    screen.blit(left_wall, (-1808 + camera_x, -1892 + camera_y))
-    screen.blit(top_wall, (-1808 + camera_x, -1892 + camera_y))
-    screen.blit(right_wall, (2460 + camera_x, -1892 + camera_y))
-    screen.blit(bottom_wall, (-1808 + camera_x, 2040 + camera_y))
+        if multiplayer:
+            update_multiplayer(list_player)
+
+        player.update(False)
+        player.draw(screen)
+
+        screen.blit(left_wall, (-1808 + camera_x, -1892 + camera_y))
+        screen.blit(top_wall, (-1808 + camera_x, -1892 + camera_y))
+        screen.blit(right_wall, (2460 + camera_x, -1892 + camera_y))
+        screen.blit(bottom_wall, (-1808 + camera_x, 2040 + camera_y))
+
+    else:
+        game_active = True
+        multiplayer = True
+
+        if multiplayer:
+            server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            server.connect((ip, port))
+
+            _thread.start_new_thread(receive, (server,))
+            _thread.start_new_thread(send, (server,))
 
     pygame.display.update()
     clock.tick(60)
