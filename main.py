@@ -219,16 +219,19 @@ def receive(server):
         except OSError:
             break
 
-        while len(list_player) < message[3] + 1:
+        while len(list_player) < message[4] + 1:
             list_player.append(None)
 
-        list_player[message[3]] = message
+        list_player[message[4]] = message
 
 
 def send(server):
+    global camera_x
+    global camera_y
+
     while True:
         try:
-            server.send(pickle.dumps([player.sprite.rect.x, player.sprite.rect.y, player.sprite.angle]))
+            server.send(pickle.dumps([player.sprite.rect.center, player.sprite.angle, camera_x, camera_y]))
         except OSError:
             break
 
@@ -237,9 +240,10 @@ def send(server):
 
 def update_multiplayer(list_player):
     for k in range(len(list_player)):
-        image = pygame.image.load('graphics/player.png')
-        image = pygame.transform.rotozoom(image, degrees(-list_player[k][2] - pi / 2), 0.75)
-        screen.blit(image, (list_player[k][0], list_player[k][1]))
+        if not list_player[k] is None:
+            image = pygame.image.load('graphics/player.png')
+            image = pygame.transform.rotozoom(image, degrees(-list_player[k][1] - pi / 2), 0.75)
+            screen.blit(image, (list_player[k][0][0] + list_player[k][2], list_player[k][0][1] + list_player[k][3]))
 
 
 pygame.init()
