@@ -239,11 +239,14 @@ def send(server):
 
 
 def update_multiplayer(list_player):
+    global camera_x
+    global camera_y
+
     for k in range(len(list_player)):
         if not list_player[k] is None:
             image = pygame.image.load('graphics/player.png')
             image = pygame.transform.rotozoom(image, degrees(-list_player[k][1] - pi / 2), 0.75)
-            screen.blit(image, (list_player[k][0][0] + list_player[k][2], list_player[k][0][1] + list_player[k][3]))
+            screen.blit(image, (list_player[k][0][0] - list_player[k][2] + camera_x, list_player[k][0][1] - list_player[k][3] + camera_y))
 
 
 pygame.init()
