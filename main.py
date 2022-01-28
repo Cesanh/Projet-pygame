@@ -9,8 +9,7 @@ from math import acos, cos, sin, sqrt, pi, degrees
 class Player(pygame.sprite.Sprite):
     def __init__(self):
         super().__init__()
-        self.image = pygame.image.load('graphics/player.png').convert_alpha()
-        self.image = pygame.transform.rotozoom(self.image, 0, 0.75)
+        self.image = pygame.transform.rotozoom(pygame.image.load('graphics/player.png').convert_alpha(), 0, 0.75)
         self.image_const = self.image
         self.rect = self.image.get_rect(center=(960, 540))
         self.speed_x = 0
@@ -186,13 +185,16 @@ class Missile(pygame.sprite.Sprite):
         self.speed_x = speed * cos(angle)
         self.speed_y = speed * sin(angle)
         self.damage = damage
-        image_0 = pygame.image.load('graphics/missile.png')
+        image_0 = pygame.transform.rotozoom(pygame.image.load('graphics/missile.png').convert_alpha(), 1, 0.25)
         images = [image_0]
         self.image = images[image_index]
         self.rect = self.image.get_rect(center=pos)
-        self.image = pygame.transform.rotozoom(self.image, degrees(-angle - pi / 2), 0.25)
+        self.image = pygame.transform.rotozoom(self.image, degrees(-angle - pi / 2), 1)
 
     def move(self):
+        global camera_x
+        global camera_y
+
         self.rect.x += self.speed_x
         self.rect.y += self.speed_y
 
@@ -212,6 +214,8 @@ class Missile(pygame.sprite.Sprite):
 
 def receive(server):
     global list_player
+    global missile
+    global list_missile_receive
 
     while True:
         try:
@@ -219,34 +223,58 @@ def receive(server):
         except OSError:
             break
 
-        while len(list_player) < message[4] + 1:
-            list_player.append(None)
+        if message:
+            if message[0] == 0:
+                while len(list_player) < message[5] + 1:
+                    list_player.append(None)
 
-        list_player[message[4]] = message
+                list_player[message[5]] = message
+            else:
+                list_missile_receive = message
+        else:
+            list_missile_receive = message
 
 
 def send(server):
     global camera_x
     global camera_y
+    global list_missile
 
     while True:
-        try:
-            server.send(pickle.dumps([player.sprite.rect.center, player.sprite.angle, camera_x, camera_y]))
-        except OSError:
-            break
+        if list_missile:
+            i = 0
+
+            for k in range(len(list_missile)):
+                k -= i
+
+                try:
+                    server.send(pickle.dumps(list_missile[k]))
+                    list_missile.pop(k)
+                    i += 1
+                except OSError:
+                    break
+
+        else:
+            try:
+                server.send(pickle.dumps([0, player.sprite.rect.center, player.sprite.angle, camera_x, camera_y]))
+            except OSError:
+                break
 
         clock.tick(60)
 
 
-def update_multiplayer(list_player):
+def update_multiplayer(list_player, list_missile_receive):
     global camera_x
     global camera_y
 
+    missile.empty()
+
     for k in range(len(list_player)):
         if not list_player[k] is None:
-            image = pygame.image.load('graphics/player.png')
-            image = pygame.transform.rotozoom(image, degrees(-list_player[k][1] - pi / 2), 0.75)
-            screen.blit(image, (list_player[k][0][0] - list_player[k][2] + camera_x, list_player[k][0][1] - list_player[k][3] + camera_y))
+            image = pygame.transform.rotozoom(pygame.image.load('graphics/player.png'), degrees(-list_player[k][2] - pi / 2), 0.75)
+            screen.blit(image, (list_player[k][1][0] - list_player[k][3] + camera_x, list_player[k][1][1] - list_player[k][4] + camera_y))
+    for k in range(len(list_missile_receive)):
+        missile.add(Missile(list_missile_receive[k][0], list_missile_receive[k][1], list_missile_receive[k][2], (list_missile_receive[k][3], list_missile_receive[k][4]), list_missile_receive[k][5]))
 
 
 pygame.init()
@@ -264,6 +292,8 @@ multiplayer = False
 ip = ''
 port = 5555
 list_player = []
+list_missile = []
+list_missile_receive = []
 
 left_wall = pygame.Surface((1268, 4864))
 right_wall = pygame.Surface((1268, 4864))
@@ -301,19 +331,22 @@ while True:
             mouse_click = pygame.mouse.get_pressed()
 
             if mouse_click[0]:
-                player.update(True)
+                if multiplayer:
+                    list_missile.append([10, 0, 0, player.sprite.rect.x, player.sprite.rect.y, player.sprite.angle])
+                else:
+                    player.update(True)
 
     if game_active:
         camera_x += camera_x_speed
         camera_y += camera_y_speed
-
         screen.fill((192, 233, 239))
 
-        missile.update()
         missile.draw(screen)
 
         if multiplayer:
-            update_multiplayer(list_player)
+            update_multiplayer(list_player, list_missile_receive)
+        else:
+            missile.update()
 
         player.update(False)
         player.draw(screen)
