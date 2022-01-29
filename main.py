@@ -168,15 +168,28 @@ class Player(pygame.sprite.Sprite):
             camera_y_speed = 0
 
     def shoot(self):
-        missile.add(Missile(10, 0, 0, self.rect.center, self.angle))
+        global shoot_chrono
+        global list_missile
+        global camera_x
+        global camera_y
+        global ask_shoot
 
-    def update(self, shoot):
-        if shoot:
-            self.shoot()
-        else:
-            self.input()
-            self.move()
-            self.camera()
+        if pygame.time.get_ticks() - shoot_chrono >= 500:
+            mouse_click = pygame.mouse.get_pressed()
+
+            if mouse_click[0]:
+                shoot_chrono = pygame.time.get_ticks()
+
+                if multiplayer:
+                    ask_shoot = True
+                else:
+                    missile.add(Missile(15, 0, 0, self.rect.center, self.angle))
+
+    def update(self):
+        self.input()
+        self.shoot()
+        self.move()
+        self.camera()
 
 
 class Missile(pygame.sprite.Sprite):
@@ -217,8 +230,8 @@ def receive(server):
     global list_missile_receive
     global missile_id
     global missile_authorization
-    global missile_send
     global index_multiplayer
+    global ask_shoot
 
     while True:
         try:
@@ -230,7 +243,7 @@ def receive(server):
 
             for k in list_missile_receive:
                 if k[1] == missile_id:
-                    missile_send = []
+                    ask_shoot = False
                     missile_authorization = True
         except OSError:
             break
@@ -257,11 +270,9 @@ def receive(server):
 def send(server):
     global camera_x
     global camera_y
-    global list_missile
     global missile_id
     global index_multiplayer
     global missile_authorization
-    global missile_send
 
     while index_multiplayer is None:
         pass
@@ -269,17 +280,20 @@ def send(server):
     missile_id = index_multiplayer * 100 + 1
 
     while True:
-        if list_missile and missile_authorization:
-            missile_send = list_missile[0]
-            list_missile.pop(0)
+        if missile_authorization:
             missile_id += 1
             missile_authorization = False
 
             if missile_id > index_multiplayer * 100 + 100:
                 missile_id = index_multiplayer * 100 + 1
 
+        if ask_shoot:
+            missile_send = [15, 0, 0, player.sprite.rect.centerx - camera_x, player.sprite.rect.centery - camera_y, player.sprite.angle]
+        else:
+            missile_send = []
+
         try:
-            server.send(pickle.dumps([[player.sprite.rect.center, player.sprite.angle, camera_x, camera_y], [missile_send, missile_id]]))
+            server.send(pickle.dumps([[player.sprite.rect.left, player.sprite.rect.top, player.sprite.angle, camera_x, camera_y], [missile_send, missile_id]]))
         except OSError:
             break
 
@@ -294,8 +308,8 @@ def update_multiplayer(list_player, list_missile_receive):
 
     for k in list_player:
         if not k is None:
-            image = pygame.transform.rotozoom(pygame.image.load('graphics/player.png'), degrees(-k[1] - pi / 2), 0.75)
-            screen.blit(image, (k[0][0] - k[2] + camera_x, k[0][1] - k[3] + camera_y))
+            image = pygame.transform.rotozoom(pygame.image.load('graphics/player.png'), degrees(-k[2] - pi / 2), 0.75)
+            screen.blit(image, (k[0] - k[3] + camera_x, k[1] - k[4] + camera_y))
 
     for k in list_missile_receive:
         missile.add(Missile(k[0][0], k[0][1], k[0][2], (k[0][3] + camera_x, k[0][4] + camera_y), k[0][5]))
@@ -311,17 +325,17 @@ camera_x_speed = 0
 camera_y_speed = 0
 camera_x = 0
 camera_y = 0
+shoot_chrono = 0
 missile_id = None
 index_multiplayer = None
 game_active = False
 multiplayer = False
+ask_shoot = False
 missile_authorization = True
 ip = ''
 port = 5555
 list_player = []
-list_missile = []
 list_missile_receive = []
-missile_send = []
 
 left_wall = pygame.Surface((1268, 4864))
 right_wall = pygame.Surface((1268, 4864))
@@ -355,15 +369,6 @@ while True:
                 pygame.quit()
                 exit()
 
-        if event.type == pygame.MOUSEBUTTONDOWN and game_active:
-            mouse_click = pygame.mouse.get_pressed()
-
-            if mouse_click[0]:
-                if multiplayer:
-                    list_missile.append([10, 0, 0, player.sprite.rect.x - camera_x, player.sprite.rect.y - camera_y, player.sprite.angle])
-                else:
-                    player.update(True)
-
     if game_active:
         camera_x += camera_x_speed
         camera_y += camera_y_speed
@@ -376,7 +381,7 @@ while True:
         else:
             missile.update()
 
-        player.update(False)
+        player.update()
         player.draw(screen)
 
         screen.blit(left_wall, (-1808 + camera_x, -1892 + camera_y))
