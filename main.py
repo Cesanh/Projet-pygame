@@ -224,15 +224,9 @@ def receive(server):
         try:
             message = pickle.loads(server.recv(2048))
 
-            index_multiplayer = message[2]
-
-            if message[0]:
-                while len(list_player) < message[0][4] + 1:
-                    list_player.append(None)
-
-                list_player[message[0][4]] = message[0]
-
+            list_player = message[0]
             list_missile_receive = message[1]
+            index_multiplayer = message[2]
 
             for k in list_missile_receive:
                 if k[1] == missile_id:
@@ -253,6 +247,10 @@ def receive(server):
         except KeyError:
             pass
         except OverflowError:
+            pass
+        except AttributeError:
+            pass
+        except TypeError:
             pass
 
 
@@ -294,13 +292,13 @@ def update_multiplayer(list_player, list_missile_receive):
 
     missile.empty()
 
-    for k in range(len(list_player)):
-        if not list_player[k] is None:
-            image = pygame.transform.rotozoom(pygame.image.load('graphics/player.png'), degrees(-list_player[k][1] - pi / 2), 0.75)
-            screen.blit(image, (list_player[k][0][0] - list_player[k][2] + camera_x, list_player[k][0][1] - list_player[k][3] + camera_y))
+    for k in list_player:
+        if not k is None:
+            image = pygame.transform.rotozoom(pygame.image.load('graphics/player.png'), degrees(-k[1] - pi / 2), 0.75)
+            screen.blit(image, (k[0][0] - k[2] + camera_x, k[0][1] - k[3] + camera_y))
 
-    for k in range(len(list_missile_receive)):
-        missile.add(Missile(list_missile_receive[k][0][0], list_missile_receive[k][0][1], list_missile_receive[k][0][2], (list_missile_receive[k][0][3] + camera_x, list_missile_receive[k][0][4] + camera_y), list_missile_receive[k][0][5]))
+    for k in list_missile_receive:
+        missile.add(Missile(k[0][0], k[0][1], k[0][2], (k[0][3] + camera_x, k[0][4] + camera_y), k[0][5]))
 
 
 pygame.init()
