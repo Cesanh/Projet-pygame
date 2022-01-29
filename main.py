@@ -215,29 +215,73 @@ class Missile(pygame.sprite.Sprite):
 def receive(server):
     global list_player
     global list_missile_receive
+    global missile_id
+    global missile_authorization
+    global missile_send
+    global index_multiplayer
 
     while True:
         try:
             message = pickle.loads(server.recv(2048))
+
+            index_multiplayer = message[2]
+
+            if message[0]:
+                while len(list_player) < message[0][4] + 1:
+                    list_player.append(None)
+
+                list_player[message[0][4]] = message[0]
+
+            list_missile_receive = message[1]
+
+            for k in list_missile_receive:
+                if k[1] == missile_id:
+                    missile_send = []
+                    missile_authorization = True
         except OSError:
             break
-
-        while len(list_player) < message[0][4] + 1:
-            list_player.append(None)
-
-        list_player[message[0][4]] = message[0]
-        list_missile_receive = message[1]
+        except EOFError:
+            break
+        except pickle.UnpicklingError:
+            pass
+        except UnicodeDecodeError:
+            pass
+        except MemoryError:
+            pass
+        except ValueError:
+            pass
+        except KeyError:
+            pass
+        except OverflowError:
+            pass
 
 
 def send(server):
     global camera_x
     global camera_y
     global list_missile
+    global missile_id
+    global index_multiplayer
+    global missile_authorization
+    global missile_send
+
+    while index_multiplayer is None:
+        pass
+
+    missile_id = index_multiplayer * 100 + 1
 
     while True:
+        if list_missile and missile_authorization:
+            missile_send = list_missile[0]
+            list_missile.pop(0)
+            missile_id += 1
+            missile_authorization = False
+
+            if missile_id > index_multiplayer * 100 + 100:
+                missile_id = index_multiplayer * 100 + 1
+
         try:
-            server.send(pickle.dumps([[player.sprite.rect.center, player.sprite.angle, camera_x, camera_y], list_missile]))
-            list_missile.clear()
+            server.send(pickle.dumps([[player.sprite.rect.center, player.sprite.angle, camera_x, camera_y], [missile_send, missile_id]]))
         except OSError:
             break
 
@@ -256,7 +300,7 @@ def update_multiplayer(list_player, list_missile_receive):
             screen.blit(image, (list_player[k][0][0] - list_player[k][2] + camera_x, list_player[k][0][1] - list_player[k][3] + camera_y))
 
     for k in range(len(list_missile_receive)):
-        missile.add(Missile(list_missile_receive[k][0], list_missile_receive[k][1], list_missile_receive[k][2], (list_missile_receive[k][3] + camera_x, list_missile_receive[k][4] + camera_y), list_missile_receive[k][5]))
+        missile.add(Missile(list_missile_receive[k][0][0], list_missile_receive[k][0][1], list_missile_receive[k][0][2], (list_missile_receive[k][0][3] + camera_x, list_missile_receive[k][0][4] + camera_y), list_missile_receive[k][0][5]))
 
 
 pygame.init()
@@ -269,13 +313,17 @@ camera_x_speed = 0
 camera_y_speed = 0
 camera_x = 0
 camera_y = 0
+missile_id = None
+index_multiplayer = None
 game_active = False
 multiplayer = False
+missile_authorization = True
 ip = ''
 port = 5555
 list_player = []
 list_missile = []
 list_missile_receive = []
+missile_send = []
 
 left_wall = pygame.Surface((1268, 4864))
 right_wall = pygame.Surface((1268, 4864))
