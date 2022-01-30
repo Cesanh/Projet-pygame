@@ -315,6 +315,7 @@ def update_multiplayer(list_player, list_missile_receive):
     global index_multiplayer
 
     missile.empty()
+    missile_player.empty()
 
     for k in list_player:
         if not k is None:
@@ -405,7 +406,7 @@ while True:
         if collision:
             for k in collision:
                 player.sprite.damage(k.damage)
-                
+
                 if multiplayer:
                     missile_destroyed.append(k.id)
 
