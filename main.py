@@ -15,6 +15,7 @@ class Player(pygame.sprite.Sprite):
         self.speed_x = 0
         self.speed_y = 0
         self.angle = -pi / 2
+        self.pv = 100
 
     def input(self):
         keys = pygame.key.get_pressed()
@@ -183,7 +184,13 @@ class Player(pygame.sprite.Sprite):
                 if multiplayer:
                     ask_shoot = True
                 else:
-                    missile.add(Missile(15, 0, 0, self.rect.center, self.angle))
+                    missile_player.add(Missile(15, 10, 0, self.rect.center, self.angle))
+
+    def damage(self, damage_point):
+        self.pv -= damage_point
+
+        if self.pv <= 0:
+            self.kill()
 
     def update(self):
         self.input()
@@ -193,7 +200,7 @@ class Player(pygame.sprite.Sprite):
 
 
 class Missile(pygame.sprite.Sprite):
-    def __init__(self, speed, damage, image_index, pos, angle):
+    def __init__(self, speed, damage, image_index, pos, angle, id=None):
         super().__init__()
         self.speed_x = speed * cos(angle)
         self.speed_y = speed * sin(angle)
@@ -203,6 +210,7 @@ class Missile(pygame.sprite.Sprite):
         self.image = images[image_index]
         self.rect = self.image.get_rect(center=pos)
         self.image = pygame.transform.rotozoom(self.image, degrees(-angle - pi / 2), 1)
+        self.id = id
 
     def move(self):
         global camera_x
@@ -245,6 +253,7 @@ def receive(server):
                 if k[1] == missile_id:
                     ask_shoot = False
                     missile_authorization = True
+                    break
         except OSError:
             break
         except EOFError:
@@ -288,12 +297,12 @@ def send(server):
                 missile_id = index_multiplayer * 100 + 1
 
         if ask_shoot:
-            missile_send = [15, 0, 0, player.sprite.rect.centerx - camera_x, player.sprite.rect.centery - camera_y, player.sprite.angle]
+            missile_send = [15, 10, 0, player.sprite.rect.centerx - camera_x, player.sprite.rect.centery - camera_y, player.sprite.angle]
         else:
             missile_send = []
 
         try:
-            server.send(pickle.dumps([[player.sprite.rect.left, player.sprite.rect.top, player.sprite.angle, camera_x, camera_y], [missile_send, missile_id]]))
+            server.send(pickle.dumps([[player.sprite.rect.left, player.sprite.rect.top, player.sprite.angle, camera_x, camera_y], [missile_send, missile_id, missile_destroyed]]))
         except OSError:
             break
 
@@ -303,6 +312,7 @@ def send(server):
 def update_multiplayer(list_player, list_missile_receive):
     global camera_x
     global camera_y
+    global index_multiplayer
 
     missile.empty()
 
@@ -312,7 +322,10 @@ def update_multiplayer(list_player, list_missile_receive):
             screen.blit(image, (k[0] - k[3] + camera_x, k[1] - k[4] + camera_y))
 
     for k in list_missile_receive:
-        missile.add(Missile(k[0][0], k[0][1], k[0][2], (k[0][3] + camera_x, k[0][4] + camera_y), k[0][5]))
+        if k[1] >= index_multiplayer * 100 + 1 and k[1] <= index_multiplayer * 100 + 100:
+            missile_player.add(Missile(k[0][0], k[0][1], k[0][2], (k[0][3] + camera_x, k[0][4] + camera_y), k[0][5], k[1]))
+        else:
+            missile.add(Missile(k[0][0], k[0][1], k[0][2], (k[0][3] + camera_x, k[0][4] + camera_y), k[0][5], k[1]))
 
 
 pygame.init()
@@ -336,6 +349,7 @@ ip = ''
 port = 5555
 list_player = []
 list_missile_receive = []
+missile_destroyed = []
 
 left_wall = pygame.Surface((1268, 4864))
 right_wall = pygame.Surface((1268, 4864))
@@ -349,8 +363,8 @@ bottom_wall.fill((85, 91, 97))
 
 player = pygame.sprite.GroupSingle()
 player.add(Player())
-
 missile = pygame.sprite.Group()
+missile_player = pygame.sprite.Group()
 
 while True:
     for event in pygame.event.get():
@@ -374,15 +388,26 @@ while True:
         camera_y += camera_y_speed
         screen.fill((192, 233, 239))
 
+        missile_player.draw(screen)
         missile.draw(screen)
 
         if multiplayer:
             update_multiplayer(list_player, list_missile_receive)
         else:
+            missile_player.update()
             missile.update()
 
         player.update()
         player.draw(screen)
+
+        collision = pygame.sprite.spritecollide(player.sprite, missile, True)
+
+        if collision:
+            for k in collision:
+                player.sprite.damage(k.damage)
+                
+                if multiplayer:
+                    missile_destroyed.append(k.id)
 
         screen.blit(left_wall, (-1808 + camera_x, -1892 + camera_y))
         screen.blit(top_wall, (-1808 + camera_x, -1892 + camera_y))
